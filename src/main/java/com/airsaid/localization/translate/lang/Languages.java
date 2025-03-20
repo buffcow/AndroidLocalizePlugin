@@ -123,7 +123,7 @@ public class Languages {
   public static final Lang YIDDISH = new Lang(95, "yi", "ייִדיש", "Yiddish");
   public static final Lang HINDI = new Lang(96, "hi", "हिंदी", "Hindi");
   public static final Lang SUNDANESE = new Lang(97, "su", "Sunda", "Sundanese");
-  public static final Lang INDONESIAN = new Lang(98, "in-rID", "Indonesia", "Indonesian");
+  public static final Lang INDONESIAN = new Lang(98, "in", "Indonesia", "Indonesian");
   public static final Lang JAVANESE = new Lang(99, "jv", "Wong Jawa", "Javanese");
   public static final Lang ENGLISH = new Lang(100, "en", "English", "English");
   public static final Lang YORUBA = new Lang(101, "yo", "Yorùbá", "Yoruba");
