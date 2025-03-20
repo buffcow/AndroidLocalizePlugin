@@ -8,7 +8,8 @@
     <extensions defaultExtensionNs="com.intellij">
         <applicationConfigurable parentId="tools"
                                  instance="com.airsaid.localization.config.SettingsConfigurable"
-                                 id="com.airsaid.localization.config.SettingsConfigurable"/>
+                                 id="com.airsaid.localization.config.SettingsConfigurable"
+                                 displayName="Android Localization"/>
 
         <notificationGroup id="Android Localize Plugin"
                            displayType="BALLOON"/>
