@@ -23,6 +23,7 @@ import com.airsaid.localization.task.TranslateTask;
 import com.airsaid.localization.translate.lang.Lang;
 import com.airsaid.localization.ui.SelectLanguagesDialog;
 import com.airsaid.localization.utils.NotificationUtil;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
@@ -87,6 +88,11 @@ public class TranslateAction extends AnAction implements SelectLanguagesDialog.O
     Project project = e.getData(CommonDataKeys.PROJECT);
     boolean isSelectValueFile = mValueService.isValueFile(e.getData(CommonDataKeys.PSI_FILE));
     e.getPresentation().setEnabledAndVisible(project != null && isSelectValueFile);
+  }
+
+  @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.BGT;
   }
 
   @Override

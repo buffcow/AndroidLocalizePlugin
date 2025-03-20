@@ -2,13 +2,15 @@ import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.date
 import org.jetbrains.changelog.markdownToHTML
 
-fun properties(key: String) = project.findProperty(key).toString()
+fun properties(key: String) = providers.gradleProperty(key).get()
 
 plugins {
   // Java support
   id("java")
   // Gradle IntelliJ Plugin
-  id("org.jetbrains.intellij") version "1.13.3"
+  // id("org.jetbrains.intellij") version "1.17.4"
+  // IntelliJ Platform Gradle Plugin
+  id("org.jetbrains.intellij.platform") version "2.4.0"
   // Gradle Changelog Plugin
   id("org.jetbrains.changelog") version "2.1.2"
 }
@@ -19,17 +21,21 @@ version = properties("pluginVersion")
 // Configure project's dependencies
 repositories {
   mavenCentral()
+
+  intellijPlatform {
+    defaultRepositories()
+  }
 }
 
 // Configure Gradle IntelliJ Plugin - read more: https://github.com/JetBrains/gradle-intellij-plugin
-intellij {
-  pluginName.set(properties("pluginName"))
-  version.set(properties("platformVersion"))
-  type.set(properties("platformType"))
-
-  // Plugin Dependencies. Uses `platformPlugins` property from the gradle.properties file.
-  plugins.set(properties("platformPlugins").split(',').map(String::trim).filter(String::isNotEmpty))
-}
+// intellij {
+//   pluginName.set(properties("pluginName"))
+//   version.set(properties("platformVersion"))
+//   type.set(properties("platformType"))
+//
+//   // Plugin Dependencies. Uses `platformPlugins` property from the gradle.properties file.
+//   plugins.set(properties("platformPlugins").split(',').map(String::trim).filter(String::isNotEmpty))
+// }
 
 // Configure Gradle Changelog Plugin - read more: https://github.com/JetBrains/gradle-changelog-plugin
 changelog {
@@ -53,7 +59,7 @@ tasks {
   }
 
   patchPluginXml {
-    version.set(properties("pluginVersion"))
+    pluginVersion.set(properties("pluginVersion"))
     sinceBuild.set(properties("pluginSinceBuild"))
     untilBuild.set(properties("pluginUntilBuild"))
 
@@ -87,11 +93,24 @@ tasks {
 
   // Configure UI tests plugin
   // Read more: https://github.com/JetBrains/intellij-ui-test-robot
-  runIdeForUiTests {
-    systemProperty("robot-server.port", "8082")
-    systemProperty("ide.mac.message.dialogs.as.sheets", "false")
-    systemProperty("jb.privacy.policy.text", "<!--999.999-->")
-    systemProperty("jb.consents.confirmation.enabled", "false")
+  // runIdeForUiTests {
+  //   systemProperty("robot-server.port", "8082")
+  //   systemProperty("ide.mac.message.dialogs.as.sheets", "false")
+  //   systemProperty("jb.privacy.policy.text", "<!--999.999-->")
+  //   systemProperty("jb.consents.confirmation.enabled", "false")
+  // }
+
+  intellijPlatformTesting.runIde.registering {
+    task {
+      jvmArgumentProviders += CommandLineArgumentProvider {
+        listOf(
+          "-Drobot-server.port=8082",
+          "-Dide.mac.message.dialogs.as.sheets=false",
+          "-Djb.privacy.policy.text=<!--999.999-->",
+          "-Djb.consents.confirmation.enabled=false",
+        )
+      }
+    }
   }
 
   signPlugin {
@@ -121,4 +140,10 @@ dependencies {
   testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
   testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.3")
 
+  intellijPlatform {
+    val type = properties("platformType")
+    val version = properties("platformVersion")
+    create(type, version)
+    bundledPlugins(properties("platformPlugins").split(',').map(String::trim))
+  }
 }
