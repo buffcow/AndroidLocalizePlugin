@@ -71,6 +71,7 @@ public final class SettingsState implements PersistentStateComponent<SettingsSta
       translatorService.setEnableCache(isEnableCache());
       translatorService.setMaxCacheSize(getMaxCacheSize());
       translatorService.setTranslationInterval(getTranslationInterval());
+      translatorService.setEnableMultiThread(isEnableMultiThread());
     }
 
     AndroidValuesService.getInstance().setSkipNonTranslatable(isSkipNonTranslatable());
@@ -140,6 +141,14 @@ public final class SettingsState implements PersistentStateComponent<SettingsSta
     state.isSkipNonTranslatable = isSkipNonTranslatable;
   }
 
+  public boolean isEnableMultiThread() {
+    return state.isEnableMultiThread;
+  }
+
+  public void setEnableMultiThread(boolean isEnable) {
+    state.isEnableMultiThread = isEnable;
+  }
+
   @Override
   public @Nullable SettingsState.State getState() {
     return state;
@@ -157,5 +166,6 @@ public final class SettingsState implements PersistentStateComponent<SettingsSta
     public int maxCacheSize = 500;
     public int translationInterval = 2; // 2 second
     public boolean isSkipNonTranslatable;
+    public boolean isEnableMultiThread;
   }
 }

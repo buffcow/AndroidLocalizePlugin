@@ -65,6 +65,7 @@ public class SettingsConfigurable implements Configurable {
     settingsComponent.setMaxCacheSize(settingsState.getMaxCacheSize());
     settingsComponent.setTranslationInterval(settingsState.getTranslationInterval());
     settingsComponent.setSkipNonTranslatable(settingsState.isSkipNonTranslatable());
+    settingsComponent.setEnableMultiThread(settingsState.isEnableMultiThread());
   }
 
   @Override
@@ -78,6 +79,7 @@ public class SettingsConfigurable implements Configurable {
     isChanged |= settingsState.getMaxCacheSize() == settingsComponent.getMaxCacheSize();
     isChanged |= settingsState.getTranslationInterval() == settingsComponent.getTranslationInterval();
     isChanged |= settingsState.isSkipNonTranslatable() == settingsComponent.isSkipNonTranslatable();
+    isChanged |= settingsState.isEnableMultiThread() == settingsComponent.isEnableMultiThread();
     LOG.info("isModified: " + isChanged);
     return isChanged;
   }
@@ -107,12 +109,14 @@ public class SettingsConfigurable implements Configurable {
     settingsState.setMaxCacheSize(settingsComponent.getMaxCacheSize());
     settingsState.setTranslationInterval(settingsComponent.getTranslationInterval());
     settingsState.setSkipNonTranslatable(settingsComponent.isSkipNonTranslatable());
+    settingsState.setEnableMultiThread(settingsComponent.isEnableMultiThread());
 
     TranslatorService translatorService = TranslatorService.getInstance();
     translatorService.setSelectedTranslator(selectedTranslator);
     translatorService.setEnableCache(settingsComponent.isEnableCache());
     translatorService.setMaxCacheSize(settingsComponent.getMaxCacheSize());
     translatorService.setTranslationInterval(settingsComponent.getTranslationInterval());
+    translatorService.setEnableMultiThread(settingsComponent.isEnableMultiThread());
 
     AndroidValuesService.getInstance().setSkipNonTranslatable(settingsComponent.isSkipNonTranslatable());
   }
@@ -129,6 +133,7 @@ public class SettingsConfigurable implements Configurable {
     settingsComponent.setMaxCacheSize(settingsState.getMaxCacheSize());
     settingsComponent.setTranslationInterval(settingsState.getTranslationInterval());
     settingsComponent.setSkipNonTranslatable(settingsState.isSkipNonTranslatable());
+    settingsComponent.setEnableMultiThread(settingsState.isEnableMultiThread());
   }
 
   @Override

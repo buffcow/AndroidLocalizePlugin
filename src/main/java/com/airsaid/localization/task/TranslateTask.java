@@ -42,10 +42,12 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -109,24 +111,27 @@ public class TranslateTask extends Task.Backgroundable {
       String valueFileName = mValueFile.getName();
       PsiFile toValuePsiFile = mValueService.getValuePsiFile(myProject, resourceDir, toLanguage, valueFileName);
       LOG.info("Translating language: " + toLanguage.getEnglishName() + ", toValuePsiFile: " + toValuePsiFile);
+
+      File toValueFile;
+      List<PsiElement> translatedValues;
       if (toValuePsiFile != null) {
         List<PsiElement> toValues = mValueService.loadValues(toValuePsiFile);
         Map<String, PsiElement> toValuesMap = toValues.stream().collect(Collectors.toMap(
-            psiElement -> {
-              if (psiElement instanceof XmlTag)
-                return ApplicationManager.getApplication().runReadAction((Computable<String>) () ->
-                    ((XmlTag) psiElement).getAttributeValue("name"));
-              else return UUID.randomUUID().toString();
-            },
-            Function.identity()
+                psiElement -> {
+                  if (psiElement instanceof XmlTag)
+                    return ApplicationManager.getApplication().runReadAction((Computable<String>) () ->
+                            ((XmlTag) psiElement).getAttributeValue("name"));
+                  else return UUID.randomUUID().toString();
+                },
+                Function.identity()
         ));
-        List<PsiElement> translatedValues = doTranslate(progressIndicator, toLanguage, toValuesMap, isOverwriteExistingString);
-        writeTranslatedValues(progressIndicator, new File(toValuePsiFile.getVirtualFile().getPath()), translatedValues);
+        toValueFile = new File(toValuePsiFile.getVirtualFile().getPath());
+        translatedValues = doTranslate(progressIndicator, toLanguage, toValuesMap, isOverwriteExistingString);
       } else {
-        List<PsiElement> translatedValues = doTranslate(progressIndicator, toLanguage, null, isOverwriteExistingString);
-        File valueFile = mValueService.getValueFile(resourceDir, toLanguage, valueFileName);
-        writeTranslatedValues(progressIndicator, valueFile, translatedValues);
+        toValueFile = mValueService.getValueFile(resourceDir, toLanguage, valueFileName);
+        translatedValues = doTranslate(progressIndicator, toLanguage, null, isOverwriteExistingString);
       }
+      writeTranslatedValues(progressIndicator, toValueFile, translatedValues);
       // If an exception occurs during the translation of the language,
       // the translation of the subsequent languages is terminated.
       // This prevents the loss of successfully translated strings in that language.
@@ -142,19 +147,22 @@ public class TranslateTask extends Task.Backgroundable {
                                        boolean isOverwrite) {
     LOG.info("doTranslate toLanguage: " + toLanguage.getEnglishName() + ", toValues: " + toValues + ", isOverwrite: " + isOverwrite);
 
-    List<PsiElement> translatedValues = new ArrayList<>();
+    List<PsiElement> translatedValues = new CopyOnWriteArrayList<>();
+
+    final boolean enableMultiThread = mTranslatorService.isEnableMultiThread();
+    final List<CompletableFuture<Void>> futures = enableMultiThread ? new CopyOnWriteArrayList<>() : null;
+
     for (PsiElement value : mValues) {
       if (progressIndicator.isCanceled()) break;
 
-      if (value instanceof XmlTag) {
-        XmlTag xmlTag = (XmlTag) value;
+      if (value instanceof XmlTag xmlTag) {
         if (!mValueService.isTranslatable(xmlTag)) {
           translatedValues.add(value);
           continue;
         }
 
         String name = ApplicationManager.getApplication().runReadAction((Computable<String>) () ->
-            xmlTag.getAttributeValue("name")
+                xmlTag.getAttributeValue("name")
         );
         if (!isOverwrite && toValues != null && toValues.containsKey(name)) {
           translatedValues.add(toValues.get(name));
@@ -162,19 +170,30 @@ public class TranslateTask extends Task.Backgroundable {
         }
 
         XmlTag translateValue = ApplicationManager.getApplication().runReadAction((Computable<XmlTag>) () ->
-            (XmlTag) xmlTag.copy()
+                (XmlTag) xmlTag.copy()
         );
         translatedValues.add(translateValue);
+        Runnable r;
         switch (translateValue.getName()) {
           case NAME_TAG_STRING:
-            doTranslate(progressIndicator, toLanguage, translateValue);
+            r = () -> translateXmlTag(progressIndicator, toLanguage, translateValue);
+            if (enableMultiThread) {
+              futures.add(CompletableFuture.runAsync(r));
+            } else {
+              r.run();
+            }
             break;
           case NAME_TAG_STRING_ARRAY:
           case NAME_TAG_PLURALS:
             XmlTag[] subTags = ApplicationManager.getApplication()
-                .runReadAction((Computable<XmlTag[]>) translateValue::getSubTags);
+                    .runReadAction((Computable<XmlTag[]>) translateValue::getSubTags);
             for (XmlTag subTag : subTags) {
-              doTranslate(progressIndicator, toLanguage, subTag);
+              r = () -> translateXmlTag(progressIndicator, toLanguage, subTag);
+              if (enableMultiThread) {
+                futures.add(CompletableFuture.runAsync(r));
+              } else {
+                r.run();
+              }
             }
             break;
         }
@@ -182,21 +201,31 @@ public class TranslateTask extends Task.Backgroundable {
         translatedValues.add(value);
       }
     }
+
+    if (enableMultiThread) {
+      CountDownLatch mTranslationLatch = new CountDownLatch(futures.size());
+      futures.forEach(future -> future.whenComplete((res, ex) -> mTranslationLatch.countDown()));
+      try {
+        mTranslationLatch.await();
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
     return translatedValues;
   }
 
-  private void doTranslate(@NotNull ProgressIndicator progressIndicator,
-                           @NotNull Lang toLanguage,
-                           @NotNull XmlTag xmlTag) {
+  private void translateXmlTag(@NotNull ProgressIndicator progressIndicator,
+                               @NotNull Lang toLanguage,
+                               @NotNull XmlTag xmlTag) {
     if (progressIndicator.isCanceled() || isXliffTag(xmlTag)) return;
 
     XmlTagValue xmlTagValue = ApplicationManager.getApplication()
         .runReadAction((Computable<XmlTagValue>) xmlTag::getValue);
     XmlTagChild[] children = xmlTagValue.getChildren();
     for (XmlTagChild child : children) {
-      if (child instanceof XmlText) {
-        XmlText xmlText = (XmlText) child;
-        String text = ApplicationManager.getApplication()
+      if (child instanceof XmlText xmlText) {
+          String text = ApplicationManager.getApplication()
             .runReadAction((Computable<String>) xmlText::getValue);
         if (TextUtil.isEmptyOrSpacesLineBreak(text)) {
           continue;
@@ -210,7 +239,7 @@ public class TranslateTask extends Task.Backgroundable {
           mTranslationError = e;
         }
       } else if (child instanceof XmlTag) {
-        doTranslate(progressIndicator, toLanguage, (XmlTag) child);
+        translateXmlTag(progressIndicator, toLanguage, (XmlTag) child);
       }
     }
   }

@@ -47,6 +47,7 @@ public final class TranslatorService {
   private final List<TranslationInterceptor> translationInterceptors;
   private boolean isEnableCache = true;
   private int intervalTime;
+  private boolean isEnableMultiThread = false;
 
   public interface TranslationInterceptor {
     String process(String text);
@@ -124,7 +125,9 @@ public final class TranslatorService {
       LOG.info(String.format("doTranslate interceptor process result: %s", result));
     }
     cacheService.put(getCacheKey(fromLang, toLang, text), result);
-    delay(intervalTime);
+    if (!isEnableMultiThread()) {
+      delay(intervalTime);
+    }
     return result;
   }
 
@@ -142,6 +145,14 @@ public final class TranslatorService {
 
   public void setTranslationInterval(int intervalTime) {
     this.intervalTime = intervalTime;
+  }
+
+  public boolean isEnableMultiThread() {
+    return isEnableMultiThread;
+  }
+
+  public void setEnableMultiThread(boolean enableMultiThread) {
+    isEnableMultiThread = enableMultiThread;
   }
 
   private String getCacheKey(@NotNull Lang fromLang, @NotNull Lang toLang, @NotNull String text) {

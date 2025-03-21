@@ -57,12 +57,15 @@ public class SettingsComponent {
   private JLabel maxCacheSizeLabel;
   private JBCheckBox enableCacheCheckBox;
   private ComboBox<String> maxCacheSizeComboBox;
+  private JLabel translationIntervalLabel;
   private ComboBox<String> translationIntervalComboBox;
   private JCheckBox skipNonTranslatableCheckBox;
+  private JBCheckBox enableMultiThreadCheckBox;
 
   public SettingsComponent() {
     initTranslatorComponents();
     initCacheComponents();
+    initMultiThreadComponents();
   }
 
   private void initTranslatorComponents() {
@@ -97,6 +100,16 @@ public class SettingsComponent {
         setEnableCache(true);
       } else if (event.getStateChange() == ItemEvent.DESELECTED) {
         setEnableCache(false);
+      }
+    });
+  }
+
+  private void initMultiThreadComponents() {
+    enableMultiThreadCheckBox.addItemListener(event -> {
+      if (event.getStateChange() == ItemEvent.SELECTED) {
+        setEnableMultiThread(true);
+      } else if (event.getStateChange() == ItemEvent.DESELECTED) {
+        setEnableMultiThread(false);
       }
     });
   }
@@ -214,5 +227,15 @@ public class SettingsComponent {
 
   public void setSkipNonTranslatable(boolean isSkipNonTranslatable) {
     skipNonTranslatableCheckBox.setSelected(isSkipNonTranslatable);
+  }
+
+  public boolean isEnableMultiThread() {
+    return enableMultiThreadCheckBox.isSelected();
+  }
+
+  public void setEnableMultiThread(boolean isEnable) {
+    enableMultiThreadCheckBox.setSelected(isEnable);
+    translationIntervalLabel.setEnabled(!isEnable);
+    translationIntervalComboBox.setEnabled(!isEnable);
   }
 }
