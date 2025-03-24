@@ -37,6 +37,7 @@ import com.intellij.psi.xml.XmlFile;
 import com.intellij.psi.xml.XmlTag;
 import com.intellij.psi.xml.XmlText;
 import com.intellij.util.Consumer;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -131,17 +132,24 @@ public final class AndroidValuesService {
     }
 
     List<PsiElement> values = new ArrayList<>(subTags.length);
-    boolean skipNext = false;
+    boolean skipped = false;
 
     for (PsiElement e : subTags) {
-      if (skipNext) {
-        skipNext = false;
+      if (skipped) {
+        skipped = false;
         if (!(e instanceof XmlTag)) {
-          continue;
+          if (!values.isEmpty()
+                  && values.getLast() instanceof XmlText prevText
+                  && e instanceof XmlText curText
+                  && StringUtils.isWhitespace(ReadAction.compute(prevText::getValue))
+                  && StringUtils.isWhitespace(ReadAction.compute(curText::getValue))
+          ) {
+            values.removeLast();
+          }
         }
       }
       if ((e instanceof XmlTag) && !isTranslatable((XmlTag) e)) {
-        skipNext = true;
+        skipped = true;
       } else {
         values.add(e);
       }
