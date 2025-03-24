@@ -71,7 +71,7 @@ public final class TranslatorService {
 
   @NotNull
   public static TranslatorService getInstance() {
-    return ServiceManager.getService(TranslatorService.class);
+    return ApplicationManager.getApplication().getService(TranslatorService.class);
   }
 
   public AbstractTranslator getDefaultTranslator() {

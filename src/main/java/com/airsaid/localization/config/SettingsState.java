@@ -21,6 +21,7 @@ import com.airsaid.localization.services.AndroidValuesService;
 import com.airsaid.localization.translate.AbstractTranslator;
 import com.airsaid.localization.translate.services.TranslatorService;
 import com.airsaid.localization.utils.SecureStorage;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.*;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.text.StringUtil;
@@ -59,7 +60,7 @@ public final class SettingsState implements PersistentStateComponent<SettingsSta
   }
 
   public static SettingsState getInstance() {
-    return ServiceManager.getService(SettingsState.class);
+    return ApplicationManager.getApplication().getService(SettingsState.class);
   }
 
   public void initSetting() {

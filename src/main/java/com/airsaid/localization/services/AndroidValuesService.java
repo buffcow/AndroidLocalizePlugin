@@ -20,11 +20,10 @@ package com.airsaid.localization.services;
 import com.airsaid.localization.translate.lang.Lang;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.components.Service;
-import com.intellij.openapi.components.ServiceManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -75,7 +74,7 @@ public final class AndroidValuesService {
    * @return the {@link AndroidValuesService} object instance.
    */
   public static AndroidValuesService getInstance() {
-    return ServiceManager.getService(AndroidValuesService.class);
+    return ApplicationManager.getApplication().getService(AndroidValuesService.class);
   }
 
   /**
@@ -100,7 +99,7 @@ public final class AndroidValuesService {
    * @return {@link PsiElement} collection.
    */
   public List<PsiElement> loadValues(@NotNull PsiFile valueFile) {
-    return ApplicationManager.getApplication().runReadAction((Computable<List<PsiElement>>) () -> {
+    return ReadAction.compute(() -> {
       LOG.info("loadValues valueFile: " + valueFile.getName());
       List<PsiElement> values = parseValuesXml(valueFile);
       LOG.info("loadValues parsed " + valueFile.getName() + " result: " + values);
@@ -170,7 +169,7 @@ public final class AndroidValuesService {
       LOG.error("Failed to write to " + valueFile.getPath() + " file: create failed!");
       return;
     }
-    ApplicationManager.getApplication().invokeLater(() -> ApplicationManager.getApplication().runWriteAction(() -> {
+    ApplicationManager.getApplication().invokeLater(() -> WriteAction.run(() -> {
       try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(valueFile, false), StandardCharsets.UTF_8))) {
         for (PsiElement value : values) {
           bw.write(value.getText());
@@ -217,7 +216,7 @@ public final class AndroidValuesService {
                                  @NotNull Lang lang,
                                  @NotNull String fileName) {
     if (project == null) return null;
-    return ApplicationManager.getApplication().runReadAction((Computable<PsiFile>) () -> {
+    return ReadAction.compute(() -> {
       VirtualFile virtualFile = LocalFileSystem.getInstance().findFileByIoFile(getValueFile(resourceDir, lang, fileName));
       if (virtualFile == null) {
         return null;
@@ -255,7 +254,7 @@ public final class AndroidValuesService {
    * @return true: need translation. false: no translation is needed.
    */
   public boolean isTranslatable(@NotNull XmlTag xmlTag) {
-    return ApplicationManager.getApplication().runReadAction((Computable<Boolean>) () -> {
+    return ReadAction.compute(() -> {
       String translatableStr = xmlTag.getAttributeValue("translatable");
       return Boolean.parseBoolean(translatableStr == null ? "true" : translatableStr);
     });

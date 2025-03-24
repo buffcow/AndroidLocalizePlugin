@@ -49,8 +49,8 @@ public class TranslateAction extends AnAction implements SelectLanguagesDialog.O
 
   @Override
   public void actionPerformed(AnActionEvent e) {
-    mProject = e.getRequiredData(CommonDataKeys.PROJECT);
-    mValueFile = e.getRequiredData(CommonDataKeys.PSI_FILE);
+    mProject = e.getData(CommonDataKeys.PROJECT);
+    mValueFile = e.getData(CommonDataKeys.PSI_FILE);
 
     SettingsState.getInstance().initSetting();
 
