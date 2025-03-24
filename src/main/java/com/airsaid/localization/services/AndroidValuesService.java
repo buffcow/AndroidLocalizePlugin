@@ -19,6 +19,7 @@ package com.airsaid.localization.services;
 
 import com.airsaid.localization.translate.lang.Lang;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.ServiceManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -34,11 +35,16 @@ import com.intellij.psi.PsiManager;
 import com.intellij.psi.xml.XmlDocument;
 import com.intellij.psi.xml.XmlFile;
 import com.intellij.psi.xml.XmlTag;
+import com.intellij.psi.xml.XmlText;
 import com.intellij.util.Consumer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -57,6 +63,8 @@ public final class AndroidValuesService {
   private static final Logger LOG = Logger.getInstance(AndroidValuesService.class);
 
   private static final Pattern STRINGS_FILE_NAME_PATTERN = Pattern.compile(".+\\.xml");
+
+  private static final String ATTR_TRANSLATE_FAILED = "__translate_failed__";
 
   private boolean isSkipNonTranslatable;
 
@@ -241,6 +249,28 @@ public final class AndroidValuesService {
     return ApplicationManager.getApplication().runReadAction((Computable<Boolean>) () -> {
       String translatableStr = xmlTag.getAttributeValue("translatable");
       return Boolean.parseBoolean(translatableStr == null ? "true" : translatableStr);
+    });
+  }
+
+  /**
+   * Marking tag as translation failed.
+   *
+   * @param xmlTag the specified xml tag of string entry.
+   */
+  public void markTranslateFailed(@NotNull XmlTag xmlTag) {
+    ReadAction.run(() -> xmlTag.setAttribute(ATTR_TRANSLATE_FAILED, String.valueOf(true)));
+  }
+
+  /**
+   * Returns whether the specified xml tag (string entry) was translated failed.
+   *
+   * @param xmlTag the specified xml tag of string entry.
+   * @return true: translate failed. false: translate is successful.
+   */
+  public boolean isTranslateFailed(@NotNull XmlTag xmlTag) {
+    return ReadAction.compute(() -> {
+      String translatableStr = xmlTag.getAttributeValue(ATTR_TRANSLATE_FAILED);
+      return Boolean.parseBoolean(translatableStr == null ? "false" : translatableStr);
     });
   }
 }

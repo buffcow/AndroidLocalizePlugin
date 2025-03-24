@@ -26,6 +26,7 @@ import com.airsaid.localization.translate.services.TranslatorService;
 import com.airsaid.localization.utils.TextUtil;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -36,12 +37,18 @@ import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
-import com.intellij.psi.xml.*;
+import com.intellij.psi.xml.XmlTag;
+import com.intellij.psi.xml.XmlTagChild;
+import com.intellij.psi.xml.XmlTagValue;
+import com.intellij.psi.xml.XmlText;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -212,7 +219,7 @@ public class TranslateTask extends Task.Backgroundable {
       }
     }
 
-    return translatedValues;
+    return filterTranslateFailedValues(progressIndicator,translatedValues);
   }
 
   private void translateXmlTag(@NotNull ProgressIndicator progressIndicator,
@@ -232,16 +239,91 @@ public class TranslateTask extends Task.Backgroundable {
         }
         try {
           String translatedText = mTranslatorService.doTranslate(Languages.AUTO, toLanguage, text);
-          ApplicationManager.getApplication().runReadAction(() -> xmlText.setValue(translatedText));
+          ReadAction.run(() -> xmlText.setValue(translatedText));
         } catch (TranslationException e) {
           LOG.warn(e);
           // Just catch the error and wait for that file to be translated and released.
           mTranslationError = e;
+          mValueService.markTranslateFailed(xmlTag);
         }
       } else if (child instanceof XmlTag) {
         translateXmlTag(progressIndicator, toLanguage, (XmlTag) child);
       }
     }
+  }
+
+  private List<PsiElement> filterTranslateFailedValues(@NotNull ProgressIndicator progressIndicator,
+                                                       @NotNull List<PsiElement> translatedValues) {
+    LOG.info("filterTranslateFailedValues translatedValues: " + translatedValues);
+
+    List<PsiElement> filteredValues = new ArrayList<>(translatedValues.size());
+    boolean removedTag = false;
+
+    for (PsiElement psiElement : translatedValues) {
+      if (progressIndicator.isCanceled()) break;
+
+      if (psiElement instanceof XmlTag xmlTag) {
+        removedTag = false;
+
+        if (!mValueService.isTranslatable(xmlTag)) {
+          filteredValues.add(xmlTag);
+          continue;
+        }
+
+        if (isXmlTagTranslateFailed(progressIndicator, xmlTag)) {
+          removedTag = true;
+        } else {
+          XmlTagChild[] tagChildren = ReadAction.compute(() -> xmlTag.getValue().getChildren());
+          if (tagChildren.length == 0 || ReadAction.compute(xmlTag::getSubTags).length == 0) {
+            filteredValues.add(xmlTag);
+            continue;
+          }
+
+          List<PsiElement> filteredSubChildren = filterTranslateFailedValues(
+                  progressIndicator, Arrays.stream(tagChildren).map(child -> ReadAction.compute(child::copy)).toList());
+
+          if (filteredSubChildren.isEmpty()
+                  || filteredSubChildren.stream().allMatch(child -> {
+            if (child instanceof XmlText t) {
+              return StringUtils.isWhitespace(ReadAction.compute(t::getValue));
+            }
+            return false;
+          })) {
+            removedTag = true;
+          } else {
+            ReadAction.run(() -> {
+              xmlTag.deleteChildRange(tagChildren[0], tagChildren[tagChildren.length - 1]);
+              for (PsiElement subChild : filteredSubChildren) {
+                xmlTag.add(subChild);
+              }
+              filteredValues.add(xmlTag);
+            });
+          }
+        }
+      } else {
+        if (removedTag) {
+          removedTag = false;
+          if (!filteredValues.isEmpty()
+                  && filteredValues.getLast() instanceof XmlText prevText
+                  && psiElement instanceof XmlText curText
+                  && StringUtils.isWhitespace(ReadAction.compute(prevText::getValue))
+                  && StringUtils.isWhitespace(ReadAction.compute(curText::getValue))
+          ) {
+            filteredValues.removeLast();
+          }
+        }
+        filteredValues.add(psiElement);
+      }
+    }
+
+    LOG.info("filtered translated values, res: " + translatedValues);
+
+    return filteredValues;
+  }
+
+  private boolean isXmlTagTranslateFailed(@NotNull ProgressIndicator progressIndicator, @NotNull XmlTag xmlTag) {
+    if (isXliffTag(xmlTag) || !mValueService.isTranslatable(xmlTag)) return false;
+    return progressIndicator.isCanceled() || mValueService.isTranslateFailed(xmlTag);
   }
 
   private void writeTranslatedValues(@NotNull ProgressIndicator progressIndicator,
@@ -268,7 +350,7 @@ public class TranslateTask extends Task.Backgroundable {
   }
 
   private boolean isXliffTag(XmlTag xmlTag) {
-    return xmlTag != null && "xliff:g".equals(xmlTag.getName());
+    return xmlTag != null && "xliff:g".equals(ReadAction.compute(xmlTag::getName));
   }
 
   @Override
