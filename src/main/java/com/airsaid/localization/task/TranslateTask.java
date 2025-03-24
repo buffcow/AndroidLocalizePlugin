@@ -24,6 +24,7 @@ import com.airsaid.localization.translate.lang.Lang;
 import com.airsaid.localization.translate.lang.Languages;
 import com.airsaid.localization.translate.services.TranslatorService;
 import com.airsaid.localization.utils.TextUtil;
+import com.google.common.util.concurrent.AtomicDouble;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
@@ -105,14 +106,14 @@ public class TranslateTask extends Task.Backgroundable {
 
   @Override
   public void run(@NotNull ProgressIndicator progressIndicator) {
-    boolean isOverwriteExistingString = PropertiesComponent.getInstance(myProject)
+    boolean isOverwriteExistingString = myProject != null && PropertiesComponent.getInstance(myProject)
         .getBoolean(Constants.KEY_IS_OVERWRITE_EXISTING_STRING);
     LOG.info("run isOverwriteExistingString: " + isOverwriteExistingString);
 
     for (Lang toLanguage : mToLanguages) {
       if (progressIndicator.isCanceled()) break;
 
-      progressIndicator.setText("Translation to " + toLanguage.getEnglishName() + "...");
+      progressIndicator.setText("Translating to " + toLanguage.getEnglishName() + "...");
 
       VirtualFile resourceDir = mValueFile.getParent().getParent();
       String valueFileName = mValueFile.getName();
@@ -153,14 +154,16 @@ public class TranslateTask extends Task.Backgroundable {
                                        @Nullable Map<String, PsiElement> toValues,
                                        boolean isOverwrite) {
     LOG.info("doTranslate toLanguage: " + toLanguage.getEnglishName() + ", toValues: " + toValues + ", isOverwrite: " + isOverwrite);
+    if (!mValues.isEmpty()) progressIndicator.setFraction(0.5 / mValues.size());
 
     List<PsiElement> translatedValues = new CopyOnWriteArrayList<>();
 
     final boolean enableMultiThread = mTranslatorService.isEnableMultiThread();
     final List<CompletableFuture<Void>> futures = enableMultiThread ? new CopyOnWriteArrayList<>() : null;
 
-    for (PsiElement value : mValues) {
+    for (int i = 0, mValuesSize = mValues.size(); i < mValuesSize; i++) {
       if (progressIndicator.isCanceled()) break;
+      PsiElement value = mValues.get(i);
 
       if (value instanceof XmlTag xmlTag) {
         if (!mValueService.isTranslatable(xmlTag)) {
@@ -188,6 +191,7 @@ public class TranslateTask extends Task.Backgroundable {
               futures.add(CompletableFuture.runAsync(r));
             } else {
               r.run();
+              progressIndicator.setFraction(i / (mValuesSize * 1.0));
             }
             break;
           case NAME_TAG_STRING_ARRAY:
@@ -200,6 +204,7 @@ public class TranslateTask extends Task.Backgroundable {
                 futures.add(CompletableFuture.runAsync(r));
               } else {
                 r.run();
+                progressIndicator.setFraction(i / (mValuesSize * 1.0));
               }
             }
             break;
@@ -210,14 +215,20 @@ public class TranslateTask extends Task.Backgroundable {
     }
 
     if (enableMultiThread) {
+      AtomicDouble completedCount = new AtomicDouble(0);
       CountDownLatch mTranslationLatch = new CountDownLatch(futures.size());
-      futures.forEach(future -> future.whenComplete((res, ex) -> mTranslationLatch.countDown()));
+      futures.forEach(future -> future.whenComplete((res, ex) -> {
+        mTranslationLatch.countDown();
+        double fraction = completedCount.updateAndGet(v -> ++v) / futures.size();
+        progressIndicator.setFraction(fraction);
+      }));
       try {
         mTranslationLatch.await();
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
     }
+    progressIndicator.setFraction(1);
 
     return filterTranslateFailedValues(progressIndicator,translatedValues);
   }
@@ -341,7 +352,7 @@ public class TranslateTask extends Task.Backgroundable {
 
   private void refreshAndOpenFile(File file) {
     VirtualFile virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
-    boolean isOpenTranslatedFile = PropertiesComponent.getInstance(myProject)
+    boolean isOpenTranslatedFile = myProject != null && PropertiesComponent.getInstance(myProject)
         .getBoolean(Constants.KEY_IS_OPEN_TRANSLATED_FILE);
     if (virtualFile != null && isOpenTranslatedFile) {
       ApplicationManager.getApplication().invokeLater(() ->

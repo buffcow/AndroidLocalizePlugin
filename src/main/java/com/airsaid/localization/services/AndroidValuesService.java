@@ -212,10 +212,11 @@ public final class AndroidValuesService {
    * @return null if not exist, otherwise return the value file.
    */
   @Nullable
-  public PsiFile getValuePsiFile(@NotNull Project project,
+  public PsiFile getValuePsiFile(@Nullable Project project,
                                  @NotNull VirtualFile resourceDir,
                                  @NotNull Lang lang,
                                  @NotNull String fileName) {
+    if (project == null) return null;
     return ApplicationManager.getApplication().runReadAction((Computable<PsiFile>) () -> {
       VirtualFile virtualFile = LocalFileSystem.getInstance().findFileByIoFile(getValueFile(resourceDir, lang, fileName));
       if (virtualFile == null) {
