@@ -21,12 +21,14 @@ import com.airsaid.localization.config.SettingsState;
 import com.airsaid.localization.translate.lang.Lang;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.Pair;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.io.HttpRequests;
 import com.intellij.util.io.RequestBuilder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
+import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -52,24 +54,30 @@ public abstract class AbstractTranslator implements Translator, TranslatorConfig
     configureRequestBuilder(requestBuilder);
 
     try {
-      return requestBuilder.connect(request -> {
-        String requestParams = getRequestParams(fromLang, toLang, text)
-            .stream()
-            .map(pair -> {
-              return pair.first.concat("=").concat(URLEncoder.encode(pair.second, StandardCharsets.UTF_8));
-            })
-            .collect(Collectors.joining("&"));
-        if (!requestParams.isEmpty()) {
-          request.write(requestParams);
-        }
-        String requestBody = getRequestBody(fromLang, toLang, text);
-        if (!requestBody.isEmpty()) {
-          request.write(requestBody);
-        }
+      return AppExecutorUtil.getAppExecutorService().submit(() -> {
+        try {
+          return requestBuilder.connect(request -> {
+            String requestParams = getRequestParams(fromLang, toLang, text)
+                    .stream()
+                    .map(pair -> {
+                      return pair.first.concat("=").concat(URLEncoder.encode(pair.second, StandardCharsets.UTF_8));
+                    })
+                    .collect(Collectors.joining("&"));
+            if (!requestParams.isEmpty()) {
+              request.write(requestParams);
+            }
+            String requestBody = getRequestBody(fromLang, toLang, text);
+            if (!requestBody.isEmpty()) {
+              request.write(requestBody);
+            }
 
-        String resultText = request.readString();
-        return parsingResult(fromLang, toLang, text, resultText);
-      });
+            String resultText = request.readString();
+            return parsingResult(fromLang, toLang, text, resultText);
+          });
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }).get();
     } catch (Exception e) {
       e.printStackTrace();
       LOG.error(e.getMessage(), e);

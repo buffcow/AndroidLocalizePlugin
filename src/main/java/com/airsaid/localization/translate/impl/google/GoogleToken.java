@@ -20,11 +20,14 @@ package com.airsaid.localization.translate.impl.google;
 import com.airsaid.localization.translate.util.AgentUtil;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.Pair;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.io.HttpRequests;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -122,10 +125,16 @@ public class GoogleToken {
     try {
       String url = String.format(ELEMENT_URL, GoogleTranslator.HOST_URL);
       LOG.info("getTKKFromGoogle url: " + url);
-      String elementJs = HttpRequests.request(url)
-          .userAgent(AgentUtil.getUserAgent())
-          .tuner(connection -> connection.setRequestProperty("Referer", GoogleTranslator.HOST_URL))
-          .readString();
+      String elementJs = AppExecutorUtil.getAppExecutorService().submit(() -> {
+        try {
+          return HttpRequests.request(url)
+                  .userAgent(AgentUtil.getUserAgent())
+                  .tuner(connection -> connection.setRequestProperty("Referer", GoogleTranslator.HOST_URL))
+                  .readString();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }).get();
       Matcher matcher = TKK_PATTERN.matcher(elementJs);
       if (matcher.find()) {
         long value1 = Long.parseLong(matcher.group(1));
