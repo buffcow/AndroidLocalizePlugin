@@ -21,13 +21,17 @@ import com.airsaid.localization.translate.lang.Lang;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDirectory;
+import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
@@ -180,6 +184,29 @@ public final class AndroidValuesService {
         LOG.error("Failed to write to " + valueFile.getPath() + " file.", e);
       }
     }));
+  }
+
+  /**
+   * Write {@link PsiElement} collection data to the specified virtual file.
+   *
+   * @param values    specified {@link PsiElement} collection data.
+   * @param valueVirtualFile specified file.
+   */
+  public void writeValueVirtualFile(@Nullable Project project, @NotNull List<PsiElement> values, @NotNull VirtualFile valueVirtualFile) {
+    Document document = ReadAction.compute(() -> FileDocumentManager.getInstance().getDocument(valueVirtualFile));
+    if (document == null) {
+      LOG.error("Failed to write to " + valueVirtualFile.getPath() + " file: doc null!");
+      return;
+    }
+
+    WriteCommandAction.runWriteCommandAction(project, () -> {
+      StringBuilder sb = new StringBuilder();
+      values.forEach(psiElement -> sb.append(psiElement.getText()));
+      document.setText(sb.toString());
+      if (project != null) {
+        PsiDocumentManager.getInstance(project).commitDocument(document);
+      }
+    });
   }
 
   /**

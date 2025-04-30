@@ -120,8 +120,6 @@ public class TranslateTask extends Task.Backgroundable {
       PsiFile toValuePsiFile = mValueService.getValuePsiFile(myProject, resourceDir, toLanguage, valueFileName);
       LOG.info("Translating language: " + toLanguage.getEnglishName() + ", toValuePsiFile: " + toValuePsiFile);
 
-      File toValueFile;
-      List<PsiElement> translatedValues;
       if (toValuePsiFile != null) {
         List<PsiElement> toValues = mValueService.loadValues(toValuePsiFile);
         Map<String, PsiElement> toValuesMap = toValues.stream().collect(Collectors.toMap(
@@ -132,13 +130,13 @@ public class TranslateTask extends Task.Backgroundable {
                 },
                 Function.identity()
         ));
-        toValueFile = new File(toValuePsiFile.getVirtualFile().getPath());
-        translatedValues = doTranslate(progressIndicator, toLanguage, toValuesMap, isOverwriteExistingString);
+        List<PsiElement> translatedValues = doTranslate(progressIndicator, toLanguage, toValuesMap, isOverwriteExistingString);
+        writeTranslatedValues(progressIndicator, toValuePsiFile.getVirtualFile(), translatedValues);
       } else {
-        toValueFile = mValueService.getValueFile(resourceDir, toLanguage, valueFileName);
-        translatedValues = doTranslate(progressIndicator, toLanguage, null, isOverwriteExistingString);
+        File toValueFile = mValueService.getValueFile(resourceDir, toLanguage, valueFileName);
+        List<PsiElement> translatedValues = doTranslate(progressIndicator, toLanguage, null, isOverwriteExistingString);
+        writeTranslatedValues(progressIndicator, toValueFile, translatedValues);
       }
-      writeTranslatedValues(progressIndicator, toValueFile, translatedValues);
       // If an exception occurs during the translation of the language,
       // the translation of the subsequent languages is terminated.
       // This prevents the loss of successfully translated strings in that language.
@@ -339,11 +337,23 @@ public class TranslateTask extends Task.Backgroundable {
     progressIndicator.setText("Writing to " + valueFile.getParentFile().getName() + " data...");
     mValueService.writeValueFile(translatedValues, valueFile);
 
-    refreshAndOpenFile(valueFile);
+    refreshAndOpenFile(LocalFileSystem.getInstance().refreshAndFindFileByIoFile(valueFile));
   }
 
-  private void refreshAndOpenFile(File file) {
-    VirtualFile virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
+  private void writeTranslatedValues(@NotNull ProgressIndicator progressIndicator,
+                                     @NotNull VirtualFile valueVirtualFile,
+                                     @NotNull List<PsiElement> translatedValues) {
+    LOG.info("writeTranslatedValues valueVirtualFile: " + valueVirtualFile + ", translatedValues: " + translatedValues);
+
+    if (progressIndicator.isCanceled() || translatedValues.isEmpty()) return;
+
+    progressIndicator.setText("Writing to " + valueVirtualFile.getName() + " data...");
+    mValueService.writeValueVirtualFile(myProject, translatedValues, valueVirtualFile);
+
+    refreshAndOpenFile(valueVirtualFile);
+  }
+
+  private void refreshAndOpenFile(VirtualFile virtualFile) {
     boolean isOpenTranslatedFile = myProject != null && PropertiesComponent.getInstance(myProject)
         .getBoolean(Constants.KEY_IS_OPEN_TRANSLATED_FILE);
     if (virtualFile != null && isOpenTranslatedFile) {
