@@ -28,6 +28,7 @@ import com.google.common.util.concurrent.AtomicDouble;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -293,7 +294,7 @@ public class TranslateTask extends Task.Backgroundable {
           })) {
             removedTag = true;
           } else {
-            ReadAction.run(() -> {
+            WriteCommandAction.runWriteCommandAction(myProject, () -> {
               xmlTag.deleteChildRange(tagChildren[0], tagChildren[tagChildren.length - 1]);
               for (PsiElement subChild : filteredSubChildren) {
                 xmlTag.add(subChild);
