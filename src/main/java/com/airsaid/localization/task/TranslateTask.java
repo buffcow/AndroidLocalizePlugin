@@ -163,7 +163,7 @@ public class TranslateTask extends Task.Backgroundable {
       PsiElement value = mValues.get(i);
 
       if (value instanceof XmlTag xmlTag) {
-        if (!mValueService.isTranslatable(xmlTag)) {
+        if (!mValueService.isTranslatable(xmlTag) || isXliffTag(xmlTag)) {
           translatedValues.add(value);
           continue;
         }
@@ -222,7 +222,7 @@ public class TranslateTask extends Task.Backgroundable {
     }
     progressIndicator.setFraction(1);
 
-    return filterTranslateFailedValues(progressIndicator,translatedValues);
+    return filterTranslateFailedValues(progressIndicator, translatedValues);
   }
 
   private void translateXmlTag(@NotNull ProgressIndicator progressIndicator,
@@ -266,7 +266,7 @@ public class TranslateTask extends Task.Backgroundable {
       if (psiElement instanceof XmlTag xmlTag) {
         removedTag = false;
 
-        if (!mValueService.isTranslatable(xmlTag)) {
+        if (!mValueService.isTranslatable(xmlTag) || isXliffTag(xmlTag)) {
           filteredValues.add(xmlTag);
           continue;
         }
@@ -297,7 +297,7 @@ public class TranslateTask extends Task.Backgroundable {
               for (PsiElement subChild : filteredSubChildren) {
                 xmlTag.add(subChild);
               }
-              filteredValues.add(xmlTag);
+              filteredValues.add(xmlTag.copy());
             });
           }
         }
